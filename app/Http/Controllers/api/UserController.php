@@ -23,13 +23,12 @@ class UserController extends Controller
             $data = $request->validated();
             $user = User::create($data);
             $token = $user->createToken('authToken')->plainTextToken;
-    
+
             return ResponseFormatter::success([
                 'user' => new UserResource($user),
                 'token_type' => 'Bearer',
                 'access_token' => $token,
             ], 'User Registered', 201);
-    
         } catch (Exception $error) {
             return ResponseFormatter::error(
                 null,
@@ -83,6 +82,4 @@ class UserController extends Controller
             );
         }
     }
-
-
 }
