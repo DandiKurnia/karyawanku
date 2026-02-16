@@ -91,15 +91,6 @@ class LeaveEntitlementsController extends Controller
                 );
             }
 
-            $isEmployee = $user->role === 'employee';
-
-            if (!$isEmployee) {
-                return ResponseFormatter::error(
-                    null,
-                    'User Not Employee',
-                    404
-                );
-            }
 
             $leaveEntitlements = LeaveEntitlements::where('user_id', $data['user_id'])->where('year', $data['year'])->first();
 
@@ -158,7 +149,22 @@ class LeaveEntitlementsController extends Controller
      */
     public function update(UpdateLeaveEntitlementsRequest $request, LeaveEntitlements $leave_entitlement)
     {
-        //
+        try {
+            $data = $request->validated();
+
+            $leave_entitlement->update($data);
+
+            return ResponseFormatter::success(
+                $leave_entitlement->load(['user', 'createdBy']),
+                'Success Update Data'
+            );
+        } catch (\Exception $error) {
+            return ResponseFormatter::error(
+                null,
+                'Internal Server Error',
+                500
+            );
+        }
     }
 
     /**

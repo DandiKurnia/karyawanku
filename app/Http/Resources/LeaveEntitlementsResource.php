@@ -17,8 +17,8 @@ class LeaveEntitlementsResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
-            'leave_type_id' => $this->leave_type_id,
-            'entitlement_days' => $this->entitlement_days,
+            'year' => $this->year,
+            'quota_days' => $this->quota_days,
             'created_by' => $this->created_by,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
