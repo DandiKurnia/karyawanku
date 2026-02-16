@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
+
+        $middleware->api(prepend: [
+            \App\Http\Middleware\ForceJsonResponse::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
@@ -26,5 +30,27 @@ return Application::configure(basePath: dirname(__DIR__))
                 ],
                 'data' => null
             ], 401);
+        });
+
+        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) {
+            return response()->json([
+                'meta' => [
+                    'code' => 422,
+                    'status' => 'error',
+                    'message' => $e->getMessage()
+                ],
+                'data' => $e->errors()
+            ], 422);
+        });
+
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, $request) {
+            return response()->json([
+                'meta' => [
+                    'code' => 404,
+                    'status' => 'error',
+                    'message' => 'Data Not Found'
+                ],
+                'data' => null
+            ], 404);
         });
     })->create();

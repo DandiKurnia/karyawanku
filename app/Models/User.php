@@ -54,4 +54,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(SocialAccount::class);
     }
+
+    public function leaveEntitlements()
+    {
+        return $this->hasMany(LeaveEntitlements::class);
+    }
+
+    public function leaveRequests()
+    {
+        return $this->hasMany(LeaveRequests::class);
+    }
 }

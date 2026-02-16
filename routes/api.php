@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\LeaveEntitlementsController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\SocialAuthController;
 use Illuminate\Support\Facades\Route;
@@ -14,4 +15,9 @@ Route::post('/auth/{provider}/token', [SocialAuthController::class, 'loginWithTo
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
+});
+
+// Admin Routes
+Route::middleware('auth:sanctum', 'role:admin')->group(function () {
+    Route::apiResource('leave-entitlements', LeaveEntitlementsController::class);
 });

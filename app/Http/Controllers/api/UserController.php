@@ -32,7 +32,7 @@ class UserController extends Controller
         } catch (Exception $error) {
             return ResponseFormatter::error(
                 null,
-                'Registration failed: ' . $error->getMessage(),
+                $error,
                 500
             );
         }
@@ -59,7 +59,7 @@ class UserController extends Controller
         } catch (Exception $error) {
             return ResponseFormatter::error(
                 null,
-                'Login failed: ' . $error->getMessage(),
+                'Internal Server Error',
                 500
             );
         }
@@ -77,7 +77,7 @@ class UserController extends Controller
         } catch (Exception $error) {
             return ResponseFormatter::error(
                 null,
-                'Logout failed: ' . $error->getMessage(),
+                'Internal Server Error',
                 500
             );
         }
