@@ -24,8 +24,8 @@ class UpdateLeaveEntitlementsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'quota_days' => 'required|numeric',
-            'carried_forward_days' => 'required|numeric',
+            'quota_days' => 'required|numeric|min:12',
+            'year' => 'nullable|numeric',
         ];
     }
 
@@ -34,8 +34,9 @@ class UpdateLeaveEntitlementsRequest extends FormRequest
         return [
             'quota_days.required' => 'Quota days is required',
             'quota_days.numeric' => 'Quota days must be a number',
-            'carried_forward_days.required' => 'Carried forward days is required',
-            'carried_forward_days.numeric' => 'Carried forward days must be a number',
+            'quota_days.min' => 'Quota days must be at least 12',
+            'year.required' => 'Year is required',
+            'year.numeric' => 'Year must be a number',
         ];
     }
 

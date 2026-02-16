@@ -25,8 +25,8 @@ class StoreLeaveEntitlementsRequest extends FormRequest
     {
         return [
             'user_id' => 'required|exists:users,id',
-            'year' => 'required|numeric',
-            'quota_days' => 'required|numeric',
+            'year' => 'required|integer|digits:4|min:1900|max:2100',
+            'quota_days' => 'required|integer|min:0',
             'created_by' => 'nullable|exists:users,id',
         ];
     }

@@ -1,17 +1,14 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Api\Employee;
 
 use App\Helpers\ResponseFormatter;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\DecideLeaveRequestsRequest;
 use App\Http\Requests\StoreLeaveRequestsRequest;
 use App\Models\LeaveEntitlements;
 use App\Models\LeaveRequests;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class LeaveRequestsController extends Controller
 {
@@ -20,7 +17,6 @@ class LeaveRequestsController extends Controller
         $id = $request->input('id');
         $status = $request->input('status');
         $year = $request->input('year');
-        $userId = $request->input('user_id');
         $limit = $request->input('limit', 10);
 
         $user = $request->user();
@@ -32,20 +28,16 @@ class LeaveRequestsController extends Controller
                 return ResponseFormatter::error(null, 'Data Not Found', 404);
             }
 
-            if ($user->role !== 'admin' && $leaveRequest->user_id !== $user->id) {
+            if ($leaveRequest->user_id !== $user->id) {
                 return ResponseFormatter::error(null, 'Forbidden: You do not have access to this resource', 403);
             }
 
             return ResponseFormatter::success($leaveRequest, 'Success Get Data');
         }
 
-        $leaveRequests = LeaveRequests::with(['user', 'decidedBy'])->orderByDesc('created_at');
-
-        if ($user->role !== 'admin') {
-            $leaveRequests->where('user_id', $user->id);
-        } elseif ($userId) {
-            $leaveRequests->where('user_id', $userId);
-        }
+        $leaveRequests = LeaveRequests::with(['user', 'decidedBy'])
+            ->where('user_id', $user->id)
+            ->orderByDesc('created_at');
 
         if ($status) {
             $leaveRequests->where('status', $status);
@@ -68,7 +60,7 @@ class LeaveRequestsController extends Controller
     {
         $user = $request->user();
 
-        if ($user->role !== 'admin' && $leave_request->user_id !== $user->id) {
+        if ($leave_request->user_id !== $user->id) {
             return ResponseFormatter::error(null, 'Forbidden: You do not have access to this resource', 403);
         }
 
@@ -81,10 +73,6 @@ class LeaveRequestsController extends Controller
     public function store(StoreLeaveRequestsRequest $request)
     {
         $user = $request->user();
-
-        if ($user->role !== 'employee') {
-            return ResponseFormatter::error(null, 'Forbidden: Only employee can create leave requests', 403);
-        }
 
         try {
             $data = $request->validated();
@@ -166,10 +154,6 @@ class LeaveRequestsController extends Controller
     {
         $user = $request->user();
 
-        if ($user->role !== 'employee') {
-            return ResponseFormatter::error(null, 'Forbidden: Only employee can cancel leave requests', 403);
-        }
-
         if ($leave_request->user_id !== $user->id) {
             return ResponseFormatter::error(null, 'Forbidden: You do not have access to this resource', 403);
         }
@@ -186,70 +170,45 @@ class LeaveRequestsController extends Controller
         );
     }
 
-    public function decide(DecideLeaveRequestsRequest $request, LeaveRequests $leave_request)
+    public function myQuota(Request $request)
     {
-        $admin = $request->user();
+        $user = $request->user();
 
-        if ($admin->role !== 'admin') {
-            return ResponseFormatter::error(null, 'Forbidden: Only admin can decide leave requests', 403);
+        $year = $request->input('year', Carbon::now()->year);
+
+        $entitlement = LeaveEntitlements::where('user_id', $user->id)
+            ->where('year', $year)
+            ->first();
+
+        if (!$entitlement) {
+            return ResponseFormatter::success([
+                'year' => (int) $year,
+                'quota_days' => 12,
+                'approved_days' => 0,
+                'pending_days' => 0,
+                'remaining_days' => 12,
+            ], 'Success Get Data');
         }
 
-        $data = $request->validated();
+        $approvedDays = LeaveRequests::where('user_id', $user->id)
+            ->where('status', 'approved')
+            ->whereYear('start_date', $year)
+            ->sum('request_days');
 
-        return DB::transaction(function () use ($leave_request, $admin, $data) {
-            $lockedLeaveRequest = LeaveRequests::whereKey($leave_request->id)
-                ->lockForUpdate()
-                ->first();
+        $pendingDays = LeaveRequests::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->whereYear('start_date', $year)
+            ->sum('request_days');
 
-            if (!$lockedLeaveRequest) {
-                return ResponseFormatter::error(null, 'Data Not Found', 404);
-            }
+        $totalQuota = $entitlement->quota_days;
+        $remainingDays = $totalQuota - $approvedDays;
 
-            if ($lockedLeaveRequest->status !== 'pending') {
-                return ResponseFormatter::error(null, 'Leave request has already been decided', 409);
-            }
-
-            $decision = $data['status'];
-
-            if ($decision === 'approved') {
-                $employee = User::whereKey($lockedLeaveRequest->user_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$employee) {
-                    return ResponseFormatter::error(null, 'User Not Found', 404);
-                }
-
-                $year = Carbon::parse($lockedLeaveRequest->start_date)->year;
-
-                $entitlement = LeaveEntitlements::firstOrCreate(
-                    ['user_id' => $employee->id, 'year' => $year],
-                    ['quota_days' => 12, 'carried_forward_days' => 0, 'created_by' => null]
-                );
-
-                $approvedDays = LeaveRequests::where('user_id', $employee->id)
-                    ->where('status', 'approved')
-                    ->whereYear('start_date', $year)
-                    ->sum('request_days');
-
-                $availableDays = ($entitlement->quota_days + $entitlement->carried_forward_days) - $approvedDays;
-
-                if ($lockedLeaveRequest->request_days > $availableDays) {
-                    return ResponseFormatter::error(null, 'Insufficient leave quota to approve this request', 409);
-                }
-            }
-
-            $lockedLeaveRequest->update([
-                'status' => $decision,
-                'decided_by' => $admin->id,
-                'decided_at' => now(),
-                'decision_note' => $data['decision_note'] ?? null,
-            ]);
-
-            return ResponseFormatter::success(
-                $lockedLeaveRequest->load(['user', 'decidedBy']),
-                'Success Update Data'
-            );
-        });
+        return ResponseFormatter::success([
+            'year' => (int) $year,
+            'quota_days' => $totalQuota,
+            'approved_days' => (int) $approvedDays,
+            'pending_days' => (int) $pendingDays,
+            'remaining_days' => $remainingDays,
+        ], 'Success Get Data');
     }
 }
