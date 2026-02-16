@@ -1,59 +1,178 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Karyawanku
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+REST API sistem manajemen cuti karyawan. Dibuat pakai Laravel 12.
 
-## About Laravel
+## Tech Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.4
+- Laravel 12
+- Laravel Sanctum (API Token Auth)
+- Laravel Socialite (Google OAuth)
+- PostgreSQL
+- Docker
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Setup
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+# clone repo
+git clone https://github.com/DandiKurnia/karyawanku.git
+cd karyawanku
 
-## Learning Laravel
+# install dependency
+composer install
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+# copy env & generate key
+cp .env.example .env
+php artisan key:generate
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+# jalankan migrasi
+php artisan migrate
 
-## Laravel Sponsors
+# jalankan server
+php artisan serve
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Konfigurasi `.env`
 
-### Premium Partners
+Sesuaikan bagian ini di file `.env`:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=karyawanku
+DB_USERNAME=root
+DB_PASSWORD=
 
-## Contributing
+# Google OAuth
+GOOGLE_CLIENT_ID=xxx
+GOOGLE_CLIENT_SECRET=xxx
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Alur Sistem
 
-## Code of Conduct
+### Authentication
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Ada 2 cara login:
 
-## Security Vulnerabilities
+1. **Konvensional** — register + login pakai email & password
+2. **OAuth Google** — login pakai akun Google via Socialite
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Keduanya menghasilkan Bearer Token (Sanctum) yang dipakai untuk akses endpoint yang butuh auth.
 
-## License
+### Role
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Sistem punya 2 role:
+
+- **Employee** — bisa ajukan cuti, lihat status pengajuannya, dan cek sisa kuota
+- **Admin** — bisa lihat semua pengajuan, approve/reject, dan kelola jatah cuti karyawan
+
+### Alur Pengajuan Cuti
+
+1. Employee kirim pengajuan cuti (tanggal mulai, tanggal selesai, alasan, lampiran)
+2. Sistem validasi: cek tanggal tidak overlap, kuota masih cukup, dan tahun harus sama
+3. Pengajuan masuk dengan status **pending**
+4. Admin review dan memutuskan **approved** atau **rejected**
+5. Saat approve, sistem cek ulang kuota supaya tidak melebihi batas
+
+### Perhitungan Kuota
+
+Setiap karyawan punya jatah **12 hari cuti per tahun**. Sisa kuota dihitung dinamis:
+
+```
+sisa = jatah_cuti - total_hari_yang_sudah_diapprove
+```
+
+Jadi tidak ada kolom `used_days` di database. Ini supaya data selalu konsisten tanpa risiko out-of-sync.
+
+### Arsitektur
+
+```
+app/
+├── Helpers/
+│   └── ResponseFormatter.php         # format response konsisten
+├── Http/
+│   ├── Controllers/Api/
+│   │   ├── Admin/
+│   │   │   ├── LeaveEntitlementsController   # kelola jatah cuti
+│   │   │   └── LeaveRequestsController       # review & decide cuti
+│   │   ├── Employee/
+│   │   │   └── LeaveRequestsController       # ajukan & pantau cuti
+│   │   ├── SocialAuthController              # OAuth Google
+│   │   └── UserController                    # register, login, logout
+│   ├── Requests/                             # validasi input (Form Request)
+│   └── Resources/
+│       └── UserResource                      # transform data user untuk response
+├── Models/
+│   ├── User
+│   ├── LeaveEntitlements
+│   ├── LeaveRequests
+│   └── SocialAccount
+```
+
+Controller dipisah berdasarkan role (Admin & Employee) supaya logic tidak campur. Validasi input pakai Form Request biar controller tetap bersih. Semua response pakai `ResponseFormatter` supaya format JSON konsisten di seluruh endpoint.
+
+## API Endpoints
+
+### Public
+
+- `POST /api/register` — register
+- `POST /api/login` — login
+- `GET /api/auth/google/redirect` — redirect ke Google
+- `GET /api/auth/google/callback` — callback OAuth
+- `POST /api/auth/google/token` — login pakai Google token
+
+### Employee (perlu auth)
+
+- `GET /api/leave-requests` — list pengajuan cuti sendiri
+- `POST /api/leave-requests` — ajukan cuti baru
+- `GET /api/leave-requests/{id}` — detail pengajuan
+- `PATCH /api/leave-requests/{id}/cancel` — batalkan (kalau masih pending)
+- `GET /api/my-leave-quota` — cek sisa kuota (bisa filter `?year=2025`)
+
+### Admin (perlu auth)
+
+- `GET /api/admin/leave-requests` — list semua pengajuan
+- `GET /api/admin/leave-requests/{id}` — detail pengajuan
+- `PATCH /api/admin/leave-requests/{id}/decide` — approve/reject
+- `GET /api/admin/leave-entitlements` — list jatah cuti
+- `POST /api/admin/leave-entitlements` — buat jatah cuti
+- `GET /api/admin/leave-entitlements/{id}` — detail jatah cuti
+- `PUT /api/admin/leave-entitlements/{id}` — update jatah cuti
+
+### Logout
+
+- `POST /api/logout`
+
+## Deploy dengan Docker
+
+Proyek ini sudah support Docker. Ada 3 container: `app` (PHP-FPM), `nginx`, dan `db` (PostgreSQL).
+
+```bash
+# pastikan .env sudah dikonfigurasi, terutama:
+# DB_HOST=db
+# DB_DATABASE=karyawanku
+
+# build & jalankan
+docker compose up -d --build
+
+# setup Laravel
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate
+docker compose exec app php artisan storage:link
+```
+
+Akses di `http://localhost:8001`
+
+Untuk stop:
+
+```bash
+docker compose down
+```
+
+## Dokumentasi Postman
+
+[https://documenter.getpostman.com/view/22817609/2sBXcDEzza](https://documenter.getpostman.com/view/22817609/2sBXcDEzza)
+
+File environment dan collection Postman juga tersedia di Google Drive.
