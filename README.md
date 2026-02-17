@@ -50,6 +50,34 @@ GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 ```
 
+### Setup Google OAuth
+
+Untuk fitur login dengan Google, perlu buat OAuth Client ID di Google Cloud Console.
+
+1. Buka [Google Cloud Console](https://console.cloud.google.com/), buat project baru atau pakai yang sudah ada, lalu masuk ke menu **APIs & Services > Credentials**
+
+![Halaman Credentials](readmeImage/image1.png)
+
+2. Klik **+ Create Credentials** dan pilih **OAuth client ID**
+
+![Create OAuth client ID](readmeImage/image2.png)
+
+3. Isi form:
+    - **Application type**: Web application
+    - **Name**: bebas (misal nama project)
+    - **Authorized JavaScript origins**: `http://localhost:8000`
+    - **Authorized redirect URIs**: `http://localhost:8000/api/auth/google/callback`
+
+![Form OAuth client](readmeImage/image3.png)
+
+4. Setelah dibuat, akan muncul **Client ID** dan **Client Secret**. Copy keduanya
+
+![Client ID dan Secret](readmeImage/image4.png)
+
+5. Paste ke file `.env`
+
+![Config di .env](readmeImage/image5.png)
+
 ## Alur Sistem
 
 ### Authentication
